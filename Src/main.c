@@ -3,6 +3,7 @@
 #include "stm32l1xx_hal.h"
 
 #include "vl53l0/ranging_vl53l0x.h"
+#include "vl53l0x_api.h"
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c2;
@@ -24,36 +25,138 @@ static void MX_I2C2_Init(void);
   */
 int main(void)
 {
-  /* MCU Configuration----------------------------------------------------------*/
+    /* MCU Configuration----------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
-
-
-  SystemClock_Config();
+    /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+    HAL_Init();
 
 
-  MX_GPIO_Init();
-  MX_I2C2_Init();
+    SystemClock_Config();
+
+
+    MX_GPIO_Init();
+    MX_I2C2_Init();
+
+    static VL53L0X_Dev_t device;
+    
+    static volatile uint16_t res = 0;
+    
+    // дефолты
+    device.I2cHandle=&hi2c2;
+    device.I2cDevAddr=0x52;                                                   
+    device.Present=0;
+    device.Id=0; 
   
-  uint8_t status = IR_Init(&hi2c2);
   
-  if( status != 0 )
-  {
-    __BKPT(0xAA);
-  }
-  
-  
-  
-  static volatile uint16_t res = 0;
+    static VL53L0X_Error Status;                           //под хранение кода ошибки
+    static uint32_t refSpadCount;                      //для процесса конфигурации датчиков
+    static uint8_t  isApertureSpads;                    //для процесса конфигурации датчиков
+    static uint8_t  VhvSettings;                          //для процесса конфигурации датчиков
+    static uint8_t  PhaseCal;                             //для процесса конфигурации датчиков
 
-  while (1)
-  {
-      IR_Process();
-      
-      res=IR_GetRange(0);
 
-  }
+    refSpadCount =    0;   
+    isApertureSpads = 0;
+    VhvSettings =     0;      
+    PhaseCal =        0;        
+
+
+    Status=VL53L0X_ERROR_NONE;                                                  //сбрасываем код ошибки        
+   
+    if (Status == VL53L0X_ERROR_NONE) 
+    {                                                         
+        Status=VL53L0X_DataInit(&device);
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status=VL53L0X_StaticInit(&device);	
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status = VL53L0X_PerformRefSpadManagement(&device, &refSpadCount, &isApertureSpads);
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status = VL53L0X_PerformRefCalibration(&device, &VhvSettings, &PhaseCal);
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status=VL53L0X_SetReferenceSpads(&device, refSpadCount, isApertureSpads);
+    }      
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status=VL53L0X_SetRefCalibration(&device, VhvSettings, PhaseCal);
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status=VL53L0X_SetDeviceMode(&device, VL53L0X_DEVICEMODE_CONTINUOUS_RANGING);	
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status = VL53L0X_SetLimitCheckValue(&device, VL53L0X_CHECKENABLE_SIGNAL_RATE_FINAL_RANGE, (FixPoint1616_t)(0.25*65536));
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status = VL53L0X_SetLimitCheckValue(&device, VL53L0X_CHECKENABLE_SIGMA_FINAL_RANGE, (FixPoint1616_t)(32*65536));
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status =VL53L0X_SetMeasurementTimingBudgetMicroSeconds(&device,	20000);
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status=VL53L0X_StartMeasurement(&device);
+    }
+            
+          
+    static uint8_t data_ready;      //флаг готовности результата измерений       
+    static VL53L0X_RangingMeasurementData_t result;
+    
+    while(1)
+    {
+        Status=VL53L0X_GetMeasurementDataReady(&device, &data_ready);
+        
+        if( Status == VL53L0X_ERROR_NONE )
+        {
+            Status=VL53L0X_GetRangingMeasurementData(&device, &result);            
+
+            if (Status == VL53L0X_ERROR_NONE) 
+            {
+                Status=VL53L0X_ClearInterruptMask(&device,0);
+            }
+        }
+    }
+  
+  
+  
+//  uint8_t status = IR_Init(&hi2c2);
+//  
+//  if( status != 0 )
+//  {
+//    __BKPT(0xAA);
+//  }
+//  
+//  
+//  
+//  static volatile uint16_t res = 0;
+
+//  while (1)
+//  {
+//      IR_Process();
+//      
+//      res=IR_GetRange(0);
+
+//  }
 
 }
 
