@@ -15,6 +15,8 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C2_Init(void);
 
+static VL53L0X_Error initSensor( VL53L0X_Dev_t * device );
+
 
 /* Private function prototypes -----------------------------------------------*/
 
@@ -48,79 +50,12 @@ int main(void)
     device.Id=0; 
   
   
-    static VL53L0X_Error Status;                           //под хранение кода ошибки
-    static uint32_t refSpadCount;                      //для процесса конфигурации датчиков
-    static uint8_t  isApertureSpads;                    //для процесса конфигурации датчиков
-    static uint8_t  VhvSettings;                          //для процесса конфигурации датчиков
-    static uint8_t  PhaseCal;                             //для процесса конфигурации датчиков
-
-
-    refSpadCount =    0;   
-    isApertureSpads = 0;
-    VhvSettings =     0;      
-    PhaseCal =        0;        
-
-
-    Status=VL53L0X_ERROR_NONE;                                                  //сбрасываем код ошибки        
-   
-    if (Status == VL53L0X_ERROR_NONE) 
-    {                                                         
-        Status=VL53L0X_DataInit(&device);
-    }
-    
-    if (Status == VL53L0X_ERROR_NONE) 
-    {
-        Status=VL53L0X_StaticInit(&device);	
-    }
-    
-    if (Status == VL53L0X_ERROR_NONE) 
-    {
-        Status = VL53L0X_PerformRefSpadManagement(&device, &refSpadCount, &isApertureSpads);
-    }
-    
-    if (Status == VL53L0X_ERROR_NONE) 
-    {
-        Status = VL53L0X_PerformRefCalibration(&device, &VhvSettings, &PhaseCal);
-    }
-    
-    if (Status == VL53L0X_ERROR_NONE) 
-    {
-        Status=VL53L0X_SetReferenceSpads(&device, refSpadCount, isApertureSpads);
-    }      
-    
-    if (Status == VL53L0X_ERROR_NONE) 
-    {
-        Status=VL53L0X_SetRefCalibration(&device, VhvSettings, PhaseCal);
-    }
-    
-    if (Status == VL53L0X_ERROR_NONE) 
-    {
-        Status=VL53L0X_SetDeviceMode(&device, VL53L0X_DEVICEMODE_CONTINUOUS_RANGING);	
-    }
-    
-    if (Status == VL53L0X_ERROR_NONE) 
-    {
-        Status = VL53L0X_SetLimitCheckValue(&device, VL53L0X_CHECKENABLE_SIGNAL_RATE_FINAL_RANGE, (FixPoint1616_t)(0.25*65536));
-    }
-    
-    if (Status == VL53L0X_ERROR_NONE) 
-    {
-        Status = VL53L0X_SetLimitCheckValue(&device, VL53L0X_CHECKENABLE_SIGMA_FINAL_RANGE, (FixPoint1616_t)(32*65536));
-    }
-    
-    if (Status == VL53L0X_ERROR_NONE) 
-    {
-        Status =VL53L0X_SetMeasurementTimingBudgetMicroSeconds(&device,	20000);
-    }
-    
-    if (Status == VL53L0X_ERROR_NONE) 
-    {
-        Status=VL53L0X_StartMeasurement(&device);
-    }
+    initSensor( &device );
             
           
-    static uint8_t data_ready;      //флаг готовности результата измерений       
+    static uint8_t data_ready;      
     static VL53L0X_RangingMeasurementData_t result;
+    static VL53L0X_Error Status;    
     
     while(1)
     {
@@ -128,36 +63,89 @@ int main(void)
         
         if( Status == VL53L0X_ERROR_NONE )
         {
-            Status=VL53L0X_GetRangingMeasurementData(&device, &result);            
+            Status = VL53L0X_GetRangingMeasurementData(&device, &result);            
 
             if (Status == VL53L0X_ERROR_NONE) 
             {
-                Status=VL53L0X_ClearInterruptMask(&device,0);
+                Status = VL53L0X_ClearInterruptMask(&device,0);
             }
         }
     }
   
-  
-  
-//  uint8_t status = IR_Init(&hi2c2);
-//  
-//  if( status != 0 )
-//  {
-//    __BKPT(0xAA);
-//  }
-//  
-//  
-//  
-//  static volatile uint16_t res = 0;
+}
 
-//  while (1)
-//  {
-//      IR_Process();
-//      
-//      res=IR_GetRange(0);
+static VL53L0X_Error initSensor( VL53L0X_Dev_t * device )
+{
+    VL53L0X_Error Status=VL53L0X_ERROR_NONE;    
 
-//  }
 
+    static uint32_t refSpadCount     = 0;                  //для процесса конфигурации датчиков
+    static uint8_t  isApertureSpads  = 0;                   //для процесса конфигурации датчиков
+    static uint8_t  VhvSettings      = 0;                     //для процесса конфигурации датчиков
+    static uint8_t  PhaseCal         = 0;                     //для процесса конфигурации датчиков
+
+    if (Status == VL53L0X_ERROR_NONE) 
+    {                                                         
+        Status=VL53L0X_SetDeviceAddress( device, 0x51 );
+        device->I2cDevAddr=0x51;    
+    }    
+   
+    if (Status == VL53L0X_ERROR_NONE) 
+    {                                                         
+        Status=VL53L0X_DataInit( device );
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status=VL53L0X_StaticInit( device );	
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status = VL53L0X_PerformRefSpadManagement( device, &refSpadCount, &isApertureSpads);
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status = VL53L0X_PerformRefCalibration( device, &VhvSettings, &PhaseCal);
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status=VL53L0X_SetReferenceSpads( device, refSpadCount, isApertureSpads);
+    }      
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status=VL53L0X_SetRefCalibration( device, VhvSettings, PhaseCal);
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status=VL53L0X_SetDeviceMode( device, VL53L0X_DEVICEMODE_CONTINUOUS_RANGING);	
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status = VL53L0X_SetLimitCheckValue( device, VL53L0X_CHECKENABLE_SIGNAL_RATE_FINAL_RANGE, (FixPoint1616_t)(0.25*65536) );
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status = VL53L0X_SetLimitCheckValue( device, VL53L0X_CHECKENABLE_SIGMA_FINAL_RANGE, (FixPoint1616_t)(32*65536) );
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status =VL53L0X_SetMeasurementTimingBudgetMicroSeconds( device,	20000 );
+    }
+    
+    if (Status == VL53L0X_ERROR_NONE) 
+    {
+        Status=VL53L0X_StartMeasurement( device );
+    }
+    
+    return Status;
 }
 
 /**
